@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "openapi-korea": {
+      "command": "python",
+      "args": ["-m", "openapi_korea.server"],
+      "cwd": "/path/to/your/project",
+      "env": {
+        "OPENAPI_KOREA_SERVICE_KEY": "your_actual_api_key_here"
+      },
+      "disabled": false,
+      "autoApprove": ["get_sejong_parking_info"]
+    }
+  }
+}
