@@ -6,13 +6,19 @@
 
 ### 프롬프트 1
 ``` 주차장정보 API에서 정보 가져오는 프롬프트
-파이썬으로 RESTful API를 이용해서 정보를 가져와서 Json으로 보여주는 프로그램을 짜고 싶어. API 주소는 https://apis.data.go.kr/5690000/sjParkingLotInformation1/sj_00000949야. 그런데 Parameter가 필요한데, serviceKey=&pageIndex=1&pageUnit=20&dataTy=json&searchCondition=ty_Se&searchKeyword= 이런 형태로 넣어주려고 해. serviceKey는 민감정보여서 설정파일을 통해서 가져올 수 있게 해주면 좋겠어. 만들어줘
-
-### 프롬프트 2
-``` MCP 서버로 만들어서 기능 확장하는 프롬프트
-지금 만들어진 MCP Server에 tool을 하나 추가하면 좋겠는데, 세종시 CCTV 현황을 알려주는 tool이야. 데이터를 가져오는 API 주소는 http://apis.data.go.kr/5690000/sjCCTV/sj_00000030야. 그런데 Parameter가 필요한데, serviceKey=&pageIndex=1&pageUnit=20&dataTy=json&searchCondition=ty_Se&searchKeyword= 이런 형태로 넣어주려고 해. serviceKey는 민감정보여서 설정파일을 통해서 가져올 수 있게 해주면 좋겠어. 추가해줄래? 그리고 지금 작성한 프롬프트는 prompts.md에 추가해줘
+파이썬으로 RESTful API를 이용해서 정보를 가져와서 Json으로 보여주는 프로그램을 짜고 싶어. API 주소는 https://apis.data.go.kr/5690000/sjParkingLotInformation1/sj_00000949야. 그런데 Parameter가 필요한데, serviceKey=&pageIndex=1&pageUnit=20&dataTy=json&searchCondition=ty_Se&searchKeyword= 이런 형태로 넣어주려고 해. serviceKey는 민감정보여서 설정파일을 통해서 가져올 수 있게 해주면 좋겠어. 만들어줘 ( kiro claude-sonnet-4 )
 ```
 
+### 프롬프트 3
+```이 코드를 기준으로 해서 API를 통해 가져오는 데이터는 tool 말고 resource에서 처리할 수 있도록 해줘 ( claude sonnet 4)
+```
+
+### 프롬프트 4
+```캐쉬된 데이터를 보여주는 tool을 추가해줘 ( gemini_cli 2.5 pro )
+```
+### 프롬프트 5
+```지금 tool에서 키워드 검색이 안되는데 API 데이터에 있는 주소에서 검색을 해서 가져오게 해줘 ( gemini_cli 2.5 pro)
+```
 ---
 
 ## 프로젝트 요약

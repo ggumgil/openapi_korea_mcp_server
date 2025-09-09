@@ -1,0 +1,16 @@
+2025-09-09 23:20:18,378 - mcp.server.lowlevel.server - DEBUG - Initializing server 'openapi-korea'
+2025-09-09 23:20:18,378 - mcp.server.lowlevel.server - DEBUG - Registering handler for ListResourcesRequest
+2025-09-09 23:20:18,378 - mcp.server.lowlevel.server - DEBUG - Registering handler for ReadResourceRequest
+2025-09-09 23:20:18,378 - mcp.server.lowlevel.server - DEBUG - Registering handler for ListToolsRequest
+2025-09-09 23:20:18,378 - mcp.server.lowlevel.server - DEBUG - Registering handler for CallToolRequest
+2025-09-09 23:20:18,378 - asyncio - DEBUG - Using selector: KqueueSelector
+2025-09-09 23:20:18,383 - mcp.server.lowlevel.server - DEBUG - Received message: root=InitializedNotification(method='notifications/initialized', params=None, jsonrpc='2.0')
+2025-09-09 23:20:18,383 - mcp.server.lowlevel.server - DEBUG - Received message: <mcp.shared.session.RequestResponder object at 0x103ced590>
+2025-09-09 23:20:18,384 - mcp.server.lowlevel.server - INFO - Processing request of type ListToolsRequest
+2025-09-09 23:20:18,384 - mcp.server.lowlevel.server - DEBUG - Dispatching request of type ListToolsRequest
+2025-09-09 23:20:18,384 - mcp.server.lowlevel.server - DEBUG - Response sent
+2025-09-09 23:20:40,689 - mcp.server.lowlevel.server - DEBUG - Received message: <mcp.shared.session.RequestResponder object at 0x103ced6d0>
+2025-09-09 23:20:40,689 - mcp.server.lowlevel.server - INFO - Processing request of type CallToolRequest
+2025-09-09 23:20:40,689 - mcp.server.lowlevel.server - DEBUG - Dispatching request of type CallToolRequest
+2025-09-09 23:20:40,875 - __main__ - INFO - Fetched parking data: {'header': {'resultCode': '00', 'resultMsg': 'NORMAL SERVICE', 'totalCount': 0, 'pageIndex': 1, 'pageUnit': 100, 'searchCondition': 'nm', 'searchKeyword': '세종시'}, 'body': {'items': []}}
+2025-09-09 23:20:40,876 - mcp.server.lowlevel.server - DEBUG - Response sent

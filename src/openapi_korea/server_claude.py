@@ -8,8 +8,6 @@ Currently supports Sejong City parking lot information through resources.
 
 import asyncio
 import json
-import sys
-import logging
 import subprocess
 import urllib.parse
 from typing import Any, Dict, List, Optional
@@ -21,21 +19,6 @@ from mcp.server import NotificationOptions, Server
 from pydantic import AnyUrl
 import mcp.server.stdio
 
-
-
-# 로그 설정
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        # stderr로 출력 (Claude에서 볼 수 있음)
-        logging.StreamHandler(sys.stderr),
-        # 파일로도 저장
-        logging.FileHandler(f'mcp_debug_{datetime.now().strftime("%Y%m%d")}.log')
-    ]
-)
-
-logger = logging.getLogger(__name__)
 
 class DataCache:
     """데이터 캐싱 클래스"""
@@ -96,9 +79,6 @@ class KoreanOpenAPIClient:
         }
         
         data = await self._make_request(base_url, params)
-        
-        logger.info(f"Fetched parking data: {data}")
-
         if data:
             self.cache.set(cache_key, data)
         return data
@@ -211,8 +191,7 @@ class KoreanOpenAPIClient:
 
 
 # MCP Server 인스턴스 생성
-server = Server("openapi-korea", "0.1.0")
-                
+server = Server("openapi-korea")
 
 # 전역 API 클라이언트
 api_client: Optional[KoreanOpenAPIClient] = None
@@ -223,19 +202,19 @@ async def handle_list_resources() -> List[types.Resource]:
     """사용 가능한 리소스 목록을 반환합니다."""
     return [
         types.Resource(
-            uri="sejong://parking/list", # type: ignore
+            uri="sejong://parking/list",  # type: ignore
             name="세종시 주차장 목록",
             description="세종시 모든 주차장 정보를 제공합니다",
             mimeType="application/json"
         ),
         types.Resource(
-            uri="sejong://smoking-area/list",  # type: ignore
+            uri="sejong://smoking-area/list", 
             name="세종시 흡연구역 목록",
             description="세종시 모든 흡연구역 정보를 제공합니다",
             mimeType="application/json"
         ),
         types.Resource(
-            uri="sejong://restaurant/list", # type: ignore
+            uri="sejong://restaurant/list",
             name="세종시 음식점 목록", 
             description="세종시 모든 음식점 정보를 제공합니다",
             mimeType="application/json"
@@ -442,32 +421,10 @@ async def handle_list_tools() -> List[types.Tool]:
                     },
                     "keyword": {
                         "type": "string",
-                        "description": "json 데이터의 body에 있는 주소에서 검색할 키워드"
-                    },
-                    "search_condition": {
-                        "type": "string",
-                        "enum": ["nm", "rdnmadr"],
-                        "description": "검색 조건 (nm: 이름, rdnmadr: 주소)",
-                        "default": "nm"
+                        "description": "검색할 키워드"
                     }
                 },
                 "required": ["resource_type", "keyword"]
-            }
-        ),
-        types.Tool(
-            name="show_cached_data",
-            description="현재 캐시된 데이터를 보여줍니다.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "resource_type": {
-                        "type": "string",
-                        "enum": ["parking", "smoking_area", "restaurant", "all"],
-                        "description": "보여줄 리소스 타입 (all은 모든 데이터)",
-                        "default": "all"
-                    }
-                },
-                "required": []
             }
         )
     ]
@@ -511,19 +468,13 @@ async def handle_call_tool(name: str, arguments: dict) -> List[types.TextContent
     elif name == "search_data":
         resource_type = arguments.get("resource_type")
         keyword = arguments.get("keyword", "")
-        search_condition = arguments.get("search_condition", "nm")
         
         try:
             if resource_type == "parking":
-                data = await api_client.get_sejong_parking_info(
-                    search_keyword=keyword, 
-                    search_condition=search_condition
-                )
+                data = await api_client.get_sejong_parking_info(search_keyword=keyword)
             elif resource_type == "smoking_area":
-                # smoking_area는 주소 검색을 지원하지 않을 수 있으므로, 기본값(nm)으로만 검색
                 data = await api_client.get_sejong_smoking_area(search_keyword=keyword)
             elif resource_type == "restaurant":
-                # restaurant는 주소 검색(addr)을 지원하지만, 여기서는 일단 기본값(mtlty)으로 검색
                 data = await api_client.get_sejong_restaurant(search_keyword=keyword)
             else:
                 return [types.TextContent(
@@ -551,40 +502,6 @@ async def handle_call_tool(name: str, arguments: dict) -> List[types.TextContent
                 text=f"❌ 검색 실패: {str(e)}"
             )]
     
-    elif name == "show_cached_data":
-        resource_type = arguments.get("resource_type", "all")
-        
-        if not api_client or not api_client.cache.cache:
-            return [types.TextContent(
-                type="text",
-                text="ℹ️ 캐시가 비어있습니다."
-            )]
-
-        now = datetime.now()
-        output_lines = [f"## 📦 캐시된 데이터 ({resource_type})"]
-        
-        cache_items = api_client.cache.cache.items()
-        
-        if resource_type != "all":
-            cache_items = [(k, v) for k, v in cache_items if k.startswith(resource_type)]
-
-        if not cache_items:
-            return [types.TextContent(
-                type="text",
-                text=f"ℹ️ '{resource_type}'에 대한 캐시된 데이터가 없습니다."
-            )]
-
-        for key, (data, timestamp) in cache_items:
-            ttl_remaining = api_client.cache.ttl - (now - timestamp)
-            output_lines.append(
-                f"- **키:** `{key}`\n  - **캐시 시간:** {timestamp.isoformat()}\n  - **남은 TTL:** {int(ttl_remaining.total_seconds())}초\n - **데이터 크기:** {len(json.dumps(data, ensure_ascii=False))}\n - **데이터 미리보기:** `{json.dumps(data, ensure_ascii=False)}...`"
-            )
-        
-        return [types.TextContent(
-            type="text",
-            text="\n".join(output_lines)
-        )]
-
     else:
         return [types.TextContent(
             type="text",
