@@ -8,6 +8,8 @@ Currently supports Sejong City parking lot information through resources.
 
 import asyncio
 import json
+import os
+import aiofiles
 import sys
 import logging
 import subprocess
@@ -239,14 +241,19 @@ async def handle_list_resources() -> List[types.Resource]:
             name="세종시 음식점 목록", 
             description="세종시 모든 음식점 정보를 제공합니다",
             mimeType="application/json"
+        ),
+        types.Resource(
+            uri="sejong://file/list", # type: ignore
+            name="세종시 정보 파일", 
+            description="세종시의 모든 정보를 담은 파일입니다.",
+            mimeType="text/plain"
         )
     ]
-
 
 @server.read_resource()
 async def handle_read_resource(uri: AnyUrl) -> str:
     """리소스 내용을 읽어 반환합니다."""
-    
+
     global resource_data_cache
     uri_str = str(uri)
 
@@ -271,7 +278,15 @@ async def handle_read_resource(uri: AnyUrl) -> str:
         elif uri_str == "sejong://restaurant/list":
             all_data = await fetch_all_pages(api_client.get_sejong_restaurant)
             formatted_data = format_restaurant_resource(all_data)
-            
+        elif uri_str == "sejong://file/list":
+            """Reads content from a specific log file asynchronously."""
+            try:
+                async with aiofiles.open("/Users/dongsilguy/Documents/02.Dev/06.PythonProjects/python_mcp/openapi_korea/src/openapi_korea/resource_file.md", mode="r") as f:
+                    content = await f.read()
+                await asyncio.sleep(1)
+                return content
+            except FileNotFoundError:
+                return os.getcwd() + "에서 파일을 찾을 수 없습니다."        
         else:
             return json.dumps({
                 "error": f"알 수 없는 리소스: {uri_str}"
