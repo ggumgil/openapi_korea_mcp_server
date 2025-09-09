@@ -33,7 +33,7 @@ logging.basicConfig(
         # stderr로 출력 (Claude에서 볼 수 있음)
         logging.StreamHandler(sys.stderr),
         # 파일로도 저장
-        logging.FileHandler(f'mcp_debug_{datetime.now().strftime("%Y%m%d")}.log')
+        logging.FileHandler(f'log\\mcp_debug_{datetime.now().strftime("%Y%m%d")}.log')
     ]
 )
 
@@ -253,6 +253,7 @@ async def handle_list_resources() -> List[types.Resource]:
 @server.read_resource()
 async def handle_read_resource(uri: AnyUrl) -> str:
     """리소스 내용을 읽어 반환합니다."""
+    logger.debug(f"handle_read_resource called with URI: {uri}")
 
     global resource_data_cache
     uri_str = str(uri)
@@ -281,12 +282,12 @@ async def handle_read_resource(uri: AnyUrl) -> str:
         elif uri_str == "sejong://file/list":
             """Reads content from a specific log file asynchronously."""
             try:
-                async with aiofiles.open("/Users/dongsilguy/Documents/02.Dev/06.PythonProjects/python_mcp/openapi_korea/src/openapi_korea/resource_file.md", mode="r") as f:
+                async with aiofiles.open( "/Users/dongsilguy/Documents/02.Dev/06.PythonProjects/python_mcp/openapi_korea/src/openapi_korea/resource_file.md", mode="r") as f:
                     content = await f.read()
                 await asyncio.sleep(1)
                 return content
             except FileNotFoundError:
-                return os.getcwd() + "에서 파일을 찾을 수 없습니다."        
+                return "리소스 파일을 찾을 수 없습니다."        
         else:
             return json.dumps({
                 "error": f"알 수 없는 리소스: {uri_str}"
@@ -608,6 +609,7 @@ async def main():
     
     # 환경변수에서 서비스 키 가져오기
     service_key = os.getenv('OPENAPI_KOREA_SERVICE_KEY')
+    resource_file_path = os.getenv('OPENAPI_RESOURCE_FILE_PATH')
     
     if not service_key:
         # 설정 파일에서 키 가져오기 시도
@@ -615,6 +617,7 @@ async def main():
             with open('config.json', 'r', encoding='utf-8') as f:
                 config = json.load(f)
                 service_key = config.get('serviceKey')
+                resource_file_path = config.get('resourceFilePath', resource_file_path)
         except (FileNotFoundError, json.JSONDecodeError):
             pass
     

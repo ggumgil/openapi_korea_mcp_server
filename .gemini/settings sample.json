@@ -6,10 +6,11 @@
         "your_project_directory/openapi_korea/src/openapi_korea/server.py"
       ],
       "env": {
-        "OPENAPI_KOREA_SERVICE_KEY": "your_openapi_korea_service_key"
+        "OPENAPI_KOREA_SERVICE_KEY": "your_openapi_korea_service_key",
+        "OPENAPI_RESOURCE_FILE_PATH": "your_file_path"
       },
       "disabled": false,
-      "autoApprove": ["get_sejong_parking_info"]
+      "autoApprove": ["search_data", "show_cached_data", "refresh_data"]
     }
   }
 }
