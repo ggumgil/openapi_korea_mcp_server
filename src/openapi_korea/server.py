@@ -96,8 +96,6 @@ class KoreanOpenAPIClient:
         }
         
         data = await self._make_request(base_url, params)
-        
-        logger.info(f"Fetched parking data: {data}")
 
         if data:
             self.cache.set(cache_key, data)
@@ -217,6 +215,8 @@ server = Server("openapi-korea", "0.1.0")
 # 전역 API 클라이언트
 api_client: Optional[KoreanOpenAPIClient] = None
 
+# 리소스 데이터 캐시
+resource_data_cache: Dict[str, Any] = {}
 
 @server.list_resources()
 async def handle_list_resources() -> List[types.Resource]:
@@ -247,33 +247,39 @@ async def handle_list_resources() -> List[types.Resource]:
 async def handle_read_resource(uri: AnyUrl) -> str:
     """리소스 내용을 읽어 반환합니다."""
     
+    global resource_data_cache
+    uri_str = str(uri)
+
     if not api_client:
         return json.dumps({
             "error": "API 클라이언트가 초기화되지 않았습니다. 서비스 키를 확인해주세요."
         }, ensure_ascii=False, indent=2)
     
-    uri_str = str(uri)
-    
     try:
+        # 캐시 확인
+        if uri_str in resource_data_cache:
+            return resource_data_cache[uri_str]
+
         if uri_str == "sejong://parking/list":
-            # 전체 주차장 데이터 가져오기 (여러 페이지)
             all_data = await fetch_all_pages(api_client.get_sejong_parking_info)
-            return format_parking_resource(all_data)
+            formatted_data = format_parking_resource(all_data)
             
         elif uri_str == "sejong://smoking-area/list":
-            # 전체 흡연구역 데이터 가져오기
             all_data = await fetch_all_pages(api_client.get_sejong_smoking_area)
-            return format_smoking_area_resource(all_data)
+            formatted_data = format_smoking_area_resource(all_data)
             
         elif uri_str == "sejong://restaurant/list":
-            # 전체 음식점 데이터 가져오기
             all_data = await fetch_all_pages(api_client.get_sejong_restaurant)
-            return format_restaurant_resource(all_data)
+            formatted_data = format_restaurant_resource(all_data)
             
         else:
             return json.dumps({
                 "error": f"알 수 없는 리소스: {uri_str}"
             }, ensure_ascii=False, indent=2)
+        
+        # 캐시에 저장
+        resource_data_cache[uri_str] = formatted_data
+        return formatted_data
             
     except Exception as e:
         return json.dumps({
@@ -281,7 +287,7 @@ async def handle_read_resource(uri: AnyUrl) -> str:
         }, ensure_ascii=False, indent=2)
 
 
-async def fetch_all_pages(api_method, max_pages: int = 10) -> List[Dict[str, Any]]:
+async def fetch_all_pages(api_method, max_pages: int = 1000) -> List[Dict[str, Any]]:
     """여러 페이지의 데이터를 모두 가져옵니다."""
     all_items = []
     page = 1
@@ -290,14 +296,13 @@ async def fetch_all_pages(api_method, max_pages: int = 10) -> List[Dict[str, Any
         try:
             data = await api_method(page_index=page, page_unit=100)
             
-            if not data or 'response' not in data:
+            if not data or 'body' not in data:
                 break
                 
-            response = data['response']
-            if 'body' not in response or 'items' not in response['body']:
+            if 'body' not in data or 'items' not in data['body']:
                 break
                 
-            items = response['body']['items']
+            items = data['body']['items']
             if not items:
                 break
                 
@@ -443,12 +448,6 @@ async def handle_list_tools() -> List[types.Tool]:
                     "keyword": {
                         "type": "string",
                         "description": "json 데이터의 body에 있는 주소에서 검색할 키워드"
-                    },
-                    "search_condition": {
-                        "type": "string",
-                        "enum": ["nm", "rdnmadr"],
-                        "description": "검색 조건 (nm: 이름, rdnmadr: 주소)",
-                        "default": "nm"
                     }
                 },
                 "required": ["resource_type", "keyword"]
@@ -477,6 +476,8 @@ async def handle_list_tools() -> List[types.Tool]:
 async def handle_call_tool(name: str, arguments: dict) -> List[types.TextContent]:
     """도구 호출을 처리합니다."""
     
+    global resource_data_cache
+
     if not api_client:
         return [types.TextContent(
             type="text",
@@ -488,14 +489,16 @@ async def handle_call_tool(name: str, arguments: dict) -> List[types.TextContent
         
         try:
             if resource_type in ["parking", "all"]:
-                api_client.cache.clear()
-                await api_client.get_sejong_parking_info()
-                
+                resource_data_cache.pop("sejong://parking/list", None)
+                await handle_read_resource(AnyUrl("sejong://parking/list"))
+
             if resource_type in ["smoking_area", "all"]:
-                await api_client.get_sejong_smoking_area()
-                
+                resource_data_cache.pop("sejong://smoking-area/list", None)
+                await handle_read_resource(AnyUrl("sejong://smoking-area/list"))
+
             if resource_type in ["restaurant", "all"]:
-                await api_client.get_sejong_restaurant()
+                resource_data_cache.pop("sejong://restaurant/list", None)
+                await handle_read_resource(AnyUrl("sejong://restaurant/list"))
             
             return [types.TextContent(
                 type="text",
@@ -510,41 +513,32 @@ async def handle_call_tool(name: str, arguments: dict) -> List[types.TextContent
     
     elif name == "search_data":
         resource_type = arguments.get("resource_type")
-        keyword = arguments.get("keyword", "")
-        search_condition = arguments.get("search_condition", "nm")
+        keyword = arguments.get("keyword", "").lower()
         
         try:
-            if resource_type == "parking":
-                data = await api_client.get_sejong_parking_info(
-                    search_keyword=keyword, 
-                    search_condition=search_condition
-                )
-            elif resource_type == "smoking_area":
-                # smoking_area는 주소 검색을 지원하지 않을 수 있으므로, 기본값(nm)으로만 검색
-                data = await api_client.get_sejong_smoking_area(search_keyword=keyword)
-            elif resource_type == "restaurant":
-                # restaurant는 주소 검색(addr)을 지원하지만, 여기서는 일단 기본값(mtlty)으로 검색
-                data = await api_client.get_sejong_restaurant(search_keyword=keyword)
-            else:
-                return [types.TextContent(
-                    type="text",
-                    text="❌ 유효하지 않은 리소스 타입입니다."
-                )]
+            resource_uri = f"sejong://{resource_type}/list"
             
-            if data and 'response' in data and 'body' in data['response']:
-                items = data['response']['body'].get('items', [])
-                count = len(items)
-                
-                return [types.TextContent(
-                    type="text",
-                    text=f"🔍 '{keyword}' 검색 결과: {count}개의 {resource_type} 항목을 찾았습니다.\n리소스에서 전체 데이터를 확인할 수 있습니다."
-                )]
-            else:
-                return [types.TextContent(
-                    type="text",
-                    text=f"🔍 '{keyword}' 검색 결과가 없습니다."
-                )]
-                
+            if resource_uri not in resource_data_cache:
+                await handle_read_resource(AnyUrl(resource_uri))
+            
+            resource_json = json.loads(resource_data_cache[resource_uri])
+            all_items = resource_json.get("data", [])
+            
+            search_results = []
+            for item in all_items:
+                # 이름 또는 주소에 키워드가 포함되어 있는지 확인
+                if (
+                    keyword in item.get('name', '').lower() or 
+                    keyword in item.get('address', '').lower()
+                ):
+                    search_results.append(item)
+            
+            count = len(search_results)
+            return [types.TextContent(
+                type="text",
+                text=f"🔍 '{keyword}' 검색 결과: {count}개의 항목을 찾았습니다.\n{json.dumps(search_results, ensure_ascii=False, indent=2)}"
+            )]
+
         except Exception as e:
             return [types.TextContent(
                 type="text",
@@ -577,7 +571,7 @@ async def handle_call_tool(name: str, arguments: dict) -> List[types.TextContent
         for key, (data, timestamp) in cache_items:
             ttl_remaining = api_client.cache.ttl - (now - timestamp)
             output_lines.append(
-                f"- **키:** `{key}`\n  - **캐시 시간:** {timestamp.isoformat()}\n  - **남은 TTL:** {int(ttl_remaining.total_seconds())}초\n - **데이터 크기:** {len(json.dumps(data, ensure_ascii=False))}\n - **데이터 미리보기:** `{json.dumps(data, ensure_ascii=False)}...`"
+                f"- **키:** `{key}`\n  - **캐시 시간:** {timestamp.isoformat()}\n  - **남은 TTL:** {int(ttl_remaining.total_seconds())}초\n - **데이터 미리보기:** `{json.dumps(data, ensure_ascii=False)}...`"
             )
         
         return [types.TextContent(
