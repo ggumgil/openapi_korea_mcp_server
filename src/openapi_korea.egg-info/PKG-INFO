@@ -1,0 +1,128 @@
+Metadata-Version: 2.4
+Name: openapi-korea
+Version: 0.1.0
+Summary: MCP Server for Korean Open API services
+Author-email: Developer <dev@example.com>
+License: MIT
+Project-URL: Homepage, https://github.com/example/openapi-korea
+Project-URL: Repository, https://github.com/example/openapi-korea
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: mcp>=1.0.0
+Requires-Dist: pydantic>=2.0.0
+
+# OpenAPI Korea MCP Server
+
+한국 공공데이터 포털의 Open API 서비스들을 MCP (Model Context Protocol) 서버로 제공합니다.
+
+## 현재 지원하는 API
+
+- **세종시 주차장 정보 조회**: 세종시의 공영 및 민영 주차장 정보를 조회할 수 있습니다.
+
+## 설치 및 설정
+
+### 1. 패키지 설치
+
+```bash
+# 개발 모드로 설치
+pip install -e .
+
+# 또는 직접 의존성 설치
+pip install mcp pydantic
+```
+
+### 2. API 키 설정
+
+공공데이터포털(https://www.data.go.kr)에서 API 키를 발급받은 후, 다음 중 하나의 방법으로 설정:
+
+#### 방법 1: 환경변수 설정
+```bash
+export OPENAPI_KOREA_SERVICE_KEY="your_api_key_here"
+```
+
+#### 방법 2: config.json 파일 생성
+```json
+{
+    "serviceKey": "your_api_key_here"
+}
+```
+
+### 3. MCP 클라이언트에서 사용
+
+Kiro IDE의 MCP 설정 파일(`.kiro/settings/mcp.json`)에 다음을 추가:
+
+```json
+{
+  "mcpServers": {
+    "openapi-korea": {
+      "command": "python",
+      "args": ["-m", "openapi_korea.server"],
+      "env": {
+        "OPENAPI_KOREA_SERVICE_KEY": "your_api_key_here"
+      },
+      "disabled": false,
+      "autoApprove": ["get_sejong_parking_info"]
+    }
+  }
+}
+```
+
+## 사용 가능한 도구
+
+### get_sejong_parking_info
+
+세종시 주차장 정보를 조회합니다.
+
+**파라미터:**
+- `page_index` (선택): 조회할 페이지 번호 (기본값: 1)
+- `page_unit` (선택): 페이지당 조회할 항목 수 (기본값: 20, 최대: 100)
+- `search_keyword` (선택): 검색할 키워드
+
+**사용 예시:**
+```
+세종시 주차장 정보를 조회해줘
+```
+
+```
+세종시에서 "공영" 키워드로 주차장을 검색해줘
+```
+
+## 개발 및 테스트
+
+### 직접 실행
+```bash
+python src/openapi_korea/server.py
+```
+
+### 테스트
+```bash
+# 기존 스크립트로 테스트
+python parking_api_final.py
+```
+
+## 기술적 특징
+
+- **M1 Mac 최적화**: SSL 문제 해결을 위해 curl을 사용
+- **비동기 처리**: asyncio를 사용한 비동기 API 호출
+- **에러 처리**: 다양한 예외 상황에 대한 적절한 처리
+- **MCP 표준 준수**: Model Context Protocol 1.0 표준을 따름
+
+## 향후 계획
+
+- 다른 지역 주차장 정보 API 추가
+- 교통정보, 날씨정보 등 다른 공공데이터 API 지원
+- 캐싱 기능 추가
+- 더 많은 검색 옵션 지원
+
+## 라이선스
+
+MIT License
