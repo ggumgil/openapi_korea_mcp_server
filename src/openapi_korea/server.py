@@ -25,20 +25,6 @@ import mcp.server.stdio
 
 
 
-# 로그 설정
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        # stderr로 출력 (Claude에서 볼 수 있음)
-        logging.StreamHandler(sys.stderr),
-        # 파일로도 저장
-        logging.FileHandler(f'log\\mcp_debug_{datetime.now().strftime("%Y%m%d")}.log')
-    ]
-)
-
-logger = logging.getLogger(__name__)
-
 class DataCache:
     """데이터 캐싱 클래스"""
     def __init__(self, ttl_minutes: int = 30):
@@ -170,6 +156,48 @@ class KoreanOpenAPIClient:
             self.cache.set(cache_key, data)
         return data
     
+    async def get_sejong_cctv(
+        self,
+        page_index: int = 1,
+        page_unit: int = 20,
+        search_keyword: str = ""
+    ) -> Optional[Dict[str, Any]]:
+        """
+        세종시 CCTV 정보를 조회합니다.
+        
+        Args:
+            page_index: 페이지 번호 (기본값: 1)
+            page_unit: 페이지당 조회 개수 (기본값: 20)
+            search_keyword: 검색 키워드 (소재지 도로명주소) (선택사항)
+            
+        Returns:
+            CCTV 정보 딕셔너리 또는 None (실패 시)
+        """
+        cache_key = f"restaurant_{page_index}_{page_unit}_{search_keyword}"
+        
+        # 캐시 확인
+        cached_data = self.cache.get(cache_key)
+        if cached_data:
+            return cached_data
+        
+        base_url = "http://apis.data.go.kr/5690000/sjCCTV/sj_00000030"
+        
+        # 파라미터 설정
+        params = {
+            'serviceKey': self.service_key,
+            'pageIndex': str(page_index),
+            'pageUnit': str(page_unit),
+            'dataTy': 'json',
+            'searchCondition': 'rdnmadr', # 소재지 도로명주소로 검색
+            'searchKeyword': search_keyword
+        }
+        
+        data = await self._make_request(base_url, params)
+        if data:
+            self.cache.set(cache_key, data)
+        return data
+
+
     async def _make_request(self, base_url: str, params: Dict[str, str]) -> Optional[Dict[str, Any]]:
         """공통 API 요청 메서드"""
         # URL 인코딩
@@ -231,7 +259,7 @@ async def handle_list_resources() -> List[types.Resource]:
             mimeType="application/json"
         ),
         types.Resource(
-            uri="sejong://smoking-area/list",  # type: ignore
+            uri="sejong://smoking_area/list",  # type: ignore
             name="세종시 흡연구역 목록",
             description="세종시 모든 흡연구역 정보를 제공합니다",
             mimeType="application/json"
@@ -240,6 +268,12 @@ async def handle_list_resources() -> List[types.Resource]:
             uri="sejong://restaurant/list", # type: ignore
             name="세종시 음식점 목록", 
             description="세종시 모든 음식점 정보를 제공합니다",
+            mimeType="application/json"
+        ),
+        types.Resource(
+            uri="sejong://cctv/list", # type: ignore
+            name="세종시 CCTV 목록", 
+            description="세종시 모든 CCTV 정보를 제공합니다",
             mimeType="application/json"
         ),
         types.Resource(
@@ -253,7 +287,7 @@ async def handle_list_resources() -> List[types.Resource]:
 @server.read_resource()
 async def handle_read_resource(uri: AnyUrl) -> str:
     """리소스 내용을 읽어 반환합니다."""
-    logger.debug(f"handle_read_resource called with URI: {uri}")
+    # logger.debug(f"handle_read_resource called with URI: {uri}")
 
     global resource_data_cache
     uri_str = str(uri)
@@ -272,13 +306,18 @@ async def handle_read_resource(uri: AnyUrl) -> str:
             all_data = await fetch_all_pages(api_client.get_sejong_parking_info)
             formatted_data = format_parking_resource(all_data)
             
-        elif uri_str == "sejong://smoking-area/list":
+        elif uri_str == "sejong://smoking_area/list":
             all_data = await fetch_all_pages(api_client.get_sejong_smoking_area)
             formatted_data = format_smoking_area_resource(all_data)
             
         elif uri_str == "sejong://restaurant/list":
             all_data = await fetch_all_pages(api_client.get_sejong_restaurant)
             formatted_data = format_restaurant_resource(all_data)
+        
+        elif uri_str == "sejong://cctv/list":
+            all_data = await fetch_all_pages(api_client.get_sejong_cctv)
+            formatted_data = format_cctv_info(all_data)
+            
         elif uri_str == "sejong://file/list":
             """Reads content from a specific log file asynchronously."""
             try:
@@ -430,6 +469,74 @@ def format_restaurant_resource(items: List[Dict[str, Any]]) -> str:
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 
+def format_cctv_info(items: List[Dict[str, Any]]) -> str:
+    """CCTV 정보를 보기 좋게 포맷팅합니다."""
+    
+    formatted_items = []
+
+    for item in items:
+        formatted_item = {
+            "id": item.get('cctvId', ''),
+            "address": item.get('rdnmadr', ''),
+            "installation_purpose": item.get('instlPurpsSe', ''),
+            "camera_pixel": item.get('cmeraPixel', ''),
+            "installation_year": item.get('instlYear', ''),
+            "management_org": item.get('mngmtInsttNm', ''),
+            "management_phone": item.get('mngmtInsttPhoneNumber', ''),
+            "coordinates": {
+                "latitude": item.get('latitude', ''),
+                "longitude": item.get('longitude', '')
+            }
+        }
+        formatted_items.append(formatted_item)
+    
+    result = {
+        "type": "sejong_cctv_info",
+        "total_count": len(formatted_items),
+        "last_updated": datetime.now().isoformat(),
+        "data": formatted_items
+    }
+    
+    return json.dumps(result, ensure_ascii=False, indent=2)
+
+    # if not data:
+    #     return "❌ 데이터가 없습니다."
+    
+    # result = "📹 **세종시 CCTV 정보 조회 결과**\n"
+    # result += "=" * 50 + "\n\n"
+    
+    # # 응답 구조 확인 및 데이터 추출
+    # if 'body' in data:
+    #     response = data
+    #     if 'body' in response and 'items' in response['body']:
+    #         items = response['body']['items']
+    #         total_count = response['body'].get('totalCount', 0)
+            
+    #         result += f"📊 **총 {total_count}개의 CCTV 정보**\n\n"
+            
+    #         for i, item in enumerate(items, 1):
+    #             result += f"**{i}. {item.get('rdnmadr', '주소 없음')}**\n"
+    #             result += f"   🎯 목적: {item.get('instlPurpsSe', '정보 없음')}\n"
+    #             result += f"   📷 카메라 화소: {item.get('cmeraPixel', '정보 없음')}만 화소\n"
+    #             result += f"   📅 설치 연도: {item.get('instlYear', '정보 없음')}년\n"
+    #             result += f"   🏢 관리기관: {item.get('mngmtInsttNm', '정보 없음')}\n"
+    #             result += f"   📞 연락처: {item.get('mngmtInsttPhoneNumber', '정보 없음')}\n"
+    #             result += "\n" + "-" * 40 + "\n\n"
+    #     else:
+    #         # items가 없는 경우, 에러 메시지나 다른 정보가 있을 수 있음
+    #         if 'header' in response and response['header'].get('resultCode') != '00':
+    #             result += f"❌ API 오류: {response['header'].get('resultMsg', '알 수 없는 오류')}\n"
+    #         else:
+    #             result += "❌ CCTV 데이터가 없습니다.\n"
+    # else:
+    #     # 전체 JSON 출력 (구조를 모를 경우)
+    #     result += "```json\n"
+    #     result += json.dumps(data, ensure_ascii=False, indent=2)
+    #     result += "\n```\n"
+    
+    # return result
+
+
 @server.list_tools()
 async def handle_list_tools() -> List[types.Tool]:
     """데이터 관리를 위한 도구 목록을 반환합니다."""
@@ -442,7 +549,7 @@ async def handle_list_tools() -> List[types.Tool]:
                 "properties": {
                     "resource_type": {
                         "type": "string",
-                        "enum": ["parking", "smoking_area", "restaurant", "all"],
+                        "enum": ["parking", "smoking_area", "restaurant", "cctv", "all"],
                         "description": "새로고침할 리소스 타입 (all은 모든 데이터)",
                         "default": "all"
                     }
@@ -458,7 +565,7 @@ async def handle_list_tools() -> List[types.Tool]:
                 "properties": {
                     "resource_type": {
                         "type": "string", 
-                        "enum": ["parking", "smoking_area", "restaurant"],
+                        "enum": ["parking", "smoking_area", "restaurant", "cctv"],
                         "description": "검색할 리소스 타입"
                     },
                     "keyword": {
@@ -477,7 +584,7 @@ async def handle_list_tools() -> List[types.Tool]:
                 "properties": {
                     "resource_type": {
                         "type": "string",
-                        "enum": ["parking", "smoking_area", "restaurant", "all"],
+                        "enum": ["parking", "smoking_area", "restaurant", "cctv", "all"],
                         "description": "보여줄 리소스 타입 (all은 모든 데이터)",
                         "default": "all"
                     }
@@ -509,13 +616,17 @@ async def handle_call_tool(name: str, arguments: dict) -> List[types.TextContent
                 await handle_read_resource(AnyUrl("sejong://parking/list"))
 
             if resource_type in ["smoking_area", "all"]:
-                resource_data_cache.pop("sejong://smoking-area/list", None)
-                await handle_read_resource(AnyUrl("sejong://smoking-area/list"))
+                resource_data_cache.pop("sejong://smoking_area/list", None)
+                await handle_read_resource(AnyUrl("sejong://smoking_area/list"))
 
             if resource_type in ["restaurant", "all"]:
                 resource_data_cache.pop("sejong://restaurant/list", None)
                 await handle_read_resource(AnyUrl("sejong://restaurant/list"))
             
+            if resource_type in ["cctv", "all"]:
+                resource_data_cache.pop("sejong://cctv/list", None)
+                await handle_read_resource(AnyUrl("sejong://cctv/list"))
+
             return [types.TextContent(
                 type="text",
                 text=f"✅ {resource_type} 데이터가 성공적으로 새로고침되었습니다."
